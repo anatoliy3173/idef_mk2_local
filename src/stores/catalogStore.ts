@@ -15,8 +15,8 @@ interface CatalogState {
   setActiveFolderId: (id: string | null) => void
   toggleTagFilter: (tagId: string) => void
   setSearchQuery: (query: string) => void
-  loadFolders: (userId: string) => Promise<void>
-  loadTags: (userId: string) => Promise<void>
+  loadFolders: () => Promise<void>
+  loadTags: () => Promise<void>
   setFolders: (folders: Folder[]) => void
   setTags: (tags: Tag[]) => void
 }
@@ -41,13 +41,13 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
   setSearchQuery: (query: string) => set({ searchQuery: query }),
 
-  loadFolders: async (userId: string) => {
-    const folders = await fetchFoldersApi(userId)
+  loadFolders: async () => {
+    const folders = await fetchFoldersApi()
     set({ folders })
   },
 
-  loadTags: async (userId: string) => {
-    const tags = await fetchTagsApi(userId)
+  loadTags: async () => {
+    const tags = await fetchTagsApi()
     set({ tags })
   },
 

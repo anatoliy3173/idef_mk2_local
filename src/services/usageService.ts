@@ -1,7 +1,3 @@
-import { supabase } from '@/services/supabaseClient'
-
-// ── Types ────────────────────────────────────────────────────────────────────
-
 export interface GlobalUsageStats {
   monthly: {
     used: number
@@ -16,30 +12,22 @@ export interface GlobalUsageStats {
   }
 }
 
-// ── Fetch global usage stats (calls serverless function) ─────────────────────
-
 export async function fetchGlobalUsageStats(): Promise<GlobalUsageStats> {
-  const { data: sessionData, error: sessionErr } = await supabase.auth.getSession()
-  if (sessionErr || !sessionData.session) {
+  const token = localStorage.getItem('auth_token')
+  if (!token) {
     throw new Error('Not authenticated')
   }
 
   const response = await fetch('/api/usage-stats', {
     method: 'GET',
     headers: {
-      Authorization: `Bearer ${sessionData.session.access_token}`,
+      Authorization: `Bearer ${token}`,
     },
   })
-
-  const responseText = await response.text()
 
   if (!response.ok) {
     throw new Error(`Failed to fetch usage stats: ${response.status}`)
   }
 
-  try {
-    return JSON.parse(responseText) as GlobalUsageStats
-  } catch {
-    throw new Error(`Usage stats response is not valid JSON: ${responseText.substring(0, 100)}`)
-  }
+  return response.json() as Promise<GlobalUsageStats>
 }

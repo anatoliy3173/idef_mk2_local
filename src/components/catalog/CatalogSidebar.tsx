@@ -53,7 +53,7 @@ export function CatalogSidebar({ diagramCounts, totalDiagrams, onManageTags }: C
 
   async function handleCreateFolder() {
     if (!user || !newFolderName.trim()) return
-    const folder = await createFolder(user.id, newFolderName.trim(), FOLDER_COLORS[folders.length % FOLDER_COLORS.length])
+    const folder = await createFolder(newFolderName.trim(), FOLDER_COLORS[folders.length % FOLDER_COLORS.length])
     if (folder) {
       setFolders([...folders, folder])
     }

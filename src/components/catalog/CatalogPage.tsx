@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '@/services/supabaseClient'
+import { api } from '@/services/apiClient'
 import { useAuthStore } from '@/stores/authStore'
 import { useCatalogStore } from '@/stores/catalogStore'
 import { fetchAllDiagramTags } from '@/services/catalogService'
@@ -33,26 +33,15 @@ export function CatalogPage() {
     if (!user) return
     setLoading(true)
 
-    let query = supabase
-      .from('diagrams')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('updated_at', { ascending: false })
-
-    if (activeFolderId !== null) {
-      query = query.eq('folder_id', activeFolderId)
-    }
-
-    const { data, error } = await query
-
-    if (!error && data) {
-      const records = data as DiagramRecord[]
+    try {
+      const records = await api.diagrams.list(activeFolderId)
       setDiagrams(records)
 
-      // Fetch tag associations for all diagrams
       const ids = records.map((d: DiagramRecord) => d.id)
       const tagMap = await fetchAllDiagramTags(ids)
       setDiagramTagMap(tagMap)
+    } catch (err) {
+      console.error('[Catalog] Failed to fetch diagrams:', err)
     }
     setLoading(false)
   }, [user, activeFolderId])
@@ -64,56 +53,46 @@ export function CatalogPage() {
   // Load folders and tags on mount
   useEffect(() => {
     if (user) {
-      loadFolders(user.id)
-      loadTags(user.id)
+      loadFolders()
+      loadTags()
     }
   }, [user, loadFolders, loadTags])
 
   async function handleCreateNew() {
     if (!user) return
-    const insertData: Record<string, unknown> = {
-      user_id: user.id,
-      title: 'Untitled Diagram',
-      xml_content: '',
-    }
-    if (activeFolderId) {
-      insertData.folder_id = activeFolderId
-    }
-
-    const { data, error } = await supabase
-      .from('diagrams')
-      .insert(insertData)
-      .select()
-      .single()
-
-    if (!error && data) {
+    try {
+      const data = await api.diagrams.create({
+        title: 'Untitled Diagram',
+        xml_content: '',
+        folder_id: activeFolderId,
+      })
       navigate(`/editor/${data.id}`)
+    } catch (err) {
+      console.error('[Catalog] Failed to create diagram:', err)
     }
   }
 
   async function handleDelete(id: string) {
-    const { error } = await supabase.from('diagrams').delete().eq('id', id)
-    if (!error) {
+    try {
+      await api.diagrams.delete(id)
       setDiagrams((prev: DiagramRecord[]) => prev.filter((d: DiagramRecord) => d.id !== id))
+    } catch (err) {
+      console.error('[Catalog] Failed to delete diagram:', err)
     }
   }
 
   async function handleDuplicate(diagram: DiagramRecord) {
     if (!user) return
-    const { data, error } = await supabase
-      .from('diagrams')
-      .insert({
-        user_id: user.id,
+    try {
+      const data = await api.diagrams.create({
         title: `${diagram.title} (Copy)`,
         xml_content: diagram.xml_content,
         node_positions: diagram.node_positions ?? {},
         folder_id: diagram.folder_id ?? null,
       })
-      .select()
-      .single()
-
-    if (!error && data) {
-      setDiagrams((prev: DiagramRecord[]) => [data as DiagramRecord, ...prev])
+      setDiagrams((prev: DiagramRecord[]) => [data, ...prev])
+    } catch (err) {
+      console.error('[Catalog] Failed to duplicate diagram:', err)
     }
   }
 
@@ -153,7 +132,7 @@ export function CatalogPage() {
     return tags.filter((t: Tag) => tagIds.includes(t.id))
   }
 
-  const username = user?.email?.split('@')[0] ?? 'User'
+  const username = user?.username ?? 'User'
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

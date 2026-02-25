@@ -20,7 +20,6 @@ export default defineConfig({
         manualChunks: {
           monaco: ['@monaco-editor/react', 'monaco-editor'],
           reactflow: ['@xyflow/react'],
-          supabase: ['@supabase/supabase-js'],
           vendor: ['react', 'react-dom', 'react-router-dom', 'zustand'],
         },
       },

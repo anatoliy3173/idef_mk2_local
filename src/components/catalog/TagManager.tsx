@@ -40,7 +40,7 @@ export function TagManager({ open, onOpenChange }: TagManagerProps) {
 
   async function handleCreate() {
     if (!user || !newName.trim()) return
-    const tag = await createTag(user.id, newName.trim(), newColor)
+    const tag = await createTag(newName.trim(), newColor)
     if (tag) {
       setTags([...tags, tag])
     }

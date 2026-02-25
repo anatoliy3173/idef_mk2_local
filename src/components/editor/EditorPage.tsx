@@ -2,7 +2,7 @@ import { useEffect, useCallback, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ReactFlowProvider } from '@xyflow/react'
 import type { Node } from '@xyflow/react'
-import { supabase } from '@/services/supabaseClient'
+import { api } from '@/services/apiClient'
 import { useDiagramStore } from '@/stores/diagramStore'
 import { useUIStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -74,13 +74,10 @@ export function EditorPage() {
         return
       }
 
-      const { data, error } = await supabase
-        .from('diagrams')
-        .select('*')
-        .eq('id', id)
-        .single()
-
-      if (error || !data) {
+      let data: Record<string, unknown>
+      try {
+        data = await api.diagrams.get(id) as unknown as Record<string, unknown>
+      } catch {
         navigate('/')
         return
       }
@@ -164,29 +161,13 @@ export function EditorPage() {
         updatePayload.title = title
       }
 
-      const { data, error } = await supabase
-        .from('diagrams')
-        .update(updatePayload)
-        .eq('id', diagramId)
-        .select('id, updated_at')
-
-      if (error) {
-        console.error('[Save] Supabase error:', error.message, error)
+      try {
+        await api.diagrams.update(diagramId, updatePayload)
+      } catch (saveErr: unknown) {
+        const errMsg = saveErr instanceof Error ? saveErr.message : 'Save failed'
+        console.error('[Save] API error:', errMsg)
         if (!silent) {
-          setSaveError(error.message)
-          setAutosaveStatus('error')
-          setTimeout(() => {
-            setAutosaveStatus('idle')
-            setSaveError(null)
-          }, 5000)
-        }
-        return
-      }
-
-      if (!data || data.length === 0) {
-        console.error('[Save] No rows updated — possible RLS or ID mismatch. ID:', diagramId)
-        if (!silent) {
-          setSaveError('Save failed: no rows updated. Try refreshing the page.')
+          setSaveError(errMsg)
           setAutosaveStatus('error')
           setTimeout(() => {
             setAutosaveStatus('idle')
@@ -207,12 +188,9 @@ export function EditorPage() {
       // Create version snapshot if XML actually changed (fire-and-forget)
       const previousXml = savedSnapshotRef.current.xml
       if (xml !== previousXml && xml.trim()) {
-        const userId = useAuthStore.getState().user?.id
-        if (userId) {
-          createVersion(diagramId, userId, xml, positionsMap).catch((err: unknown) => {
-            console.error('[Version] Failed to create version:', err)
-          })
-        }
+        createVersion(diagramId, xml, positionsMap as unknown as NodePositionMap).catch((err: unknown) => {
+          console.error('[Version] Failed to create version:', err)
+        })
       }
 
       const newSnapshot = { xml, title, layoutMaxPerRow: currentMaxPerRow }
@@ -232,7 +210,7 @@ export function EditorPage() {
         if (thumbElement) {
           generateThumbnail(thumbElement, storeNodes, { isGridMode }).then((thumb: string | null) => {
             if (thumb && diagramId) {
-              supabase.from('diagrams').update({ thumbnail: thumb }).eq('id', diagramId).then(() => {})
+              api.diagrams.update(diagramId, { thumbnail: thumb }).catch(() => {})
             }
           }).catch(() => {})
         }
@@ -367,34 +345,25 @@ export function EditorPage() {
       if (!isUnsaved || !diagramId) return
 
       // Fire a keepalive fetch so the save survives page teardown
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
-      if (supabaseUrl && supabaseKey) {
-        // Build positions from nodes
-        const posMap: Record<string, { x: number; y: number }> = {}
-        store.nodes.forEach((n: Node) => {
-          posMap[n.id] = { x: n.position.x, y: n.position.y }
-        })
+      // Build positions from nodes
+      const posMap: Record<string, { x: number; y: number }> = {}
+      store.nodes.forEach((n: Node) => {
+        posMap[n.id] = { x: n.position.x, y: n.position.y }
+      })
 
-        // Get current session token
-        const sessionKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
-        let accessToken = supabaseKey
-        if (sessionKey) {
-          try {
-            const session = JSON.parse(localStorage.getItem(sessionKey) || '{}')
-            if (session.access_token) accessToken = session.access_token as string
-          } catch { /* use anon key */ }
-        }
-
-        fetch(`${supabaseUrl}/rest/v1/diagrams?id=eq.${diagramId}`, {
+      const authToken = localStorage.getItem('auth_token')
+      if (authToken) {
+        fetch(`/api/diagrams/${diagramId}`, {
           method: 'PATCH',
           headers: {
-            'apikey': supabaseKey,
-            'Authorization': `Bearer ${accessToken}`,
+            'Authorization': `Bearer ${authToken}`,
             'Content-Type': 'application/json',
-            'Prefer': 'return=minimal',
           },
-          body: JSON.stringify({ xml_content: xml, node_positions: maxPerRow > 0 ? { ...posMap, _layout: { maxPerRow } } : posMap, title }),
+          body: JSON.stringify({
+            xml_content: xml,
+            node_positions: maxPerRow > 0 ? { ...posMap, _layout: { maxPerRow } } : posMap,
+            title,
+          }),
           keepalive: true,
         }).catch(() => {})
       }

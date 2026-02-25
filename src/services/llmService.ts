@@ -1,4 +1,3 @@
-import { supabase } from '@/services/supabaseClient'
 import { parseXml } from '@/services/xmlService'
 import { parseTeamXml } from '@/services/teamXmlParser'
 import type { ValidationError, ValidationWarning } from '@/types/agentSystem'
@@ -60,11 +59,11 @@ export function estimateTokens(text: string): number {
 // ── API caller ───────────────────────────────────────────────────────────────
 
 async function getAuthToken(): Promise<string> {
-  const { data, error } = await supabase.auth.getSession()
-  if (error || !data.session) {
+  const token = localStorage.getItem('auth_token')
+  if (!token) {
     throw new LlmError('Not authenticated', 'UNAUTHORIZED')
   }
-  return data.session.access_token
+  return token
 }
 
 export async function generateXml(

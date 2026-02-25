@@ -37,7 +37,7 @@ interface DiagramState {
   savedNodePositions: NodePositionMap
   setSavedNodePositions: (positions: NodePositionMap) => void
 
-  // Current diagram ID (from Supabase)
+  // Current diagram ID
   currentDiagramId: string | null
   currentTitle: string
   /** True only when the user explicitly renamed the title via commitTitle */

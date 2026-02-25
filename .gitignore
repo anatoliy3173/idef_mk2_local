@@ -32,6 +32,6 @@ coverage
 # TypeScript
 *.tsbuildinfo
 
-# Supabase
-supabase/.temp/
+# SQLite database
+data/
 .vercel
